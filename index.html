@@ -11,7 +11,7 @@
 <section class="panel hidden" id="parametros"><h2>Parámetros</h2><p>Mantenimiento de responsables. Actividades comerciales: Soda y Termales.</p><button class="btn" type="button" onclick="openRespModal()">+ Agregar responsable</button><div id="responsablesList"></div>
 <dialog id="respDialog" aria-label="Agregar responsable" style="border:0;border-radius:14px;padding:25px;max-width:420px;width:calc(100% - 24px);box-shadow:0 18px 55px #1c364355">
 <form id="respForm"><h3 style="margin-top:0">Agregar responsable</h3><label for="newResp">Nombre del responsable</label><input id="newResp" required maxlength="80" placeholder="Nombre del responsable"><div class="actions"><button class="btn" type="submit">Guardar</button><button class="btn alt" type="button" onclick="document.getElementById('respDialog').close()">Cancelar</button></div></form></dialog></section>
-<section class="panel hidden" id="usuarios"><h2>Mantenimiento de usuarios</h2><p>Vista de ejemplo para el superusuario. La autenticación real se habilitará al conectar la base de datos.</p><div class="entry">Perfil Operativo — Registra, comenta y consulta.</div><div class="entry">Perfil Administrador — Cambia responsables, cierra y administra parámetros.</div><div class="entry">Perfil Superusuario — Acceso total, incluido mantenimiento de usuarios.</div></section></main>
+<section class="panel hidden" id="usuarios"><div class="row"><div><h2>Administración de usuarios</h2><p>Creá y mantené usuarios de demostración, sus perfiles y su estado.</p></div><button class="btn" type="button" onclick="openUserModal()">+ Agregar usuario</button></div><p class="notice"><strong>Modo demostración:</strong> estos usuarios se guardan solamente en este navegador y NO controlan todavía el inicio de sesión. Las contraseñas, invitaciones y permisos reales se implementarán con Supabase Auth.</p><div class="grid" style="margin:16px 0"><div><label for="userSearch">Buscar usuario</label><input id="userSearch" placeholder="Buscar por usuario, nombre o correo" oninput="renderUsers()"></div><div><label for="userFilter">Estado</label><select id="userFilter" onchange="renderUsers()"><option value="todos">Todos</option><option value="activo">Activos</option><option value="inactivo">Inactivos</option></select></div></div><div class="tablewrap"><table><thead><tr><th>Usuario</th><th>Nombre completo</th><th>Correo electrónico</th><th>Perfil</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="usersRows"></tbody></table></div><dialog class="follow-modal" id="userDialog" aria-label="Administrar usuario"><form id="userForm"><h3 id="userModalTitle">Agregar usuario</h3><div class="grid"><div><label for="editUsername">Usuario</label><input id="editUsername" required maxlength="50" pattern="[a-zA-Z0-9._-]+" placeholder="ej. admin"></div><div><label for="editName">Nombre completo</label><input id="editName" required maxlength="100"></div><div class="full"><label for="editEmail">Correo electrónico</label><input id="editEmail" type="email" required maxlength="160" autocomplete="off"></div><div><label for="editRole">Perfil</label><select id="editRole"><option value="operativo">Operativo</option><option value="admin">Administrador</option><option value="super">Superusuario</option></select></div><div><label for="editStatus">Estado</label><select id="editStatus"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div></div><div class="actions"><button class="btn" type="submit">Guardar usuario</button><button type="button" class="btn alt" onclick="document.getElementById('userDialog').close()">Cancelar</button></div></form></dialog></section></main>
 <script>
 const KEY='control-termales-demo-v1';
 const SESSION_KEY='control-termales-demo-session';
@@ -87,6 +87,63 @@ function saveFollow(e){
  }
  save();$('followDialog').close();render();
 }
+
+
+const USERS_KEY='control-termales-demo-users-v1';
+let demoUsers;
+try{demoUsers=JSON.parse(localStorage.getItem(USERS_KEY));}catch(e){demoUsers=null;}
+if(!Array.isArray(demoUsers)){demoUsers=[{username:'admin',name:'Luis Keylor Murillo',email:'',profile:'super',status:'activo'}];}
+function persistUsers(){localStorage.setItem(USERS_KEY,JSON.stringify(demoUsers));}
+function isSuper(){return document.body.classList.contains('logged-in')&&role()==='super';}
+const roleNames={operativo:'Operativo',admin:'Administrador',super:'Superusuario'};
+let editingUsername=null;
+function renderUsers(){
+ if(!isSuper())return;
+ const q=$('userSearch').value.trim().toLowerCase(),filter=$('userFilter').value;
+ const list=demoUsers.filter(u=>(filter==='todos'||u.status===filter)&&[u.username,u.name,u.email].some(t=>(t||'').toLowerCase().includes(q)));
+ $('usersRows').innerHTML=list.map(u=>'<tr><td><strong>'+esc(u.username)+'</strong></td><td>'+esc(u.name)+'</td><td>'+esc(u.email||'—')+'</td><td>'+esc(roleNames[u.profile]||u.profile)+'</td><td><span class="pill '+(u.status==='activo'?'done':'')+'">'+(u.status==='activo'?'Activo':'Inactivo')+'</span></td><td><button type="button" class="btn alt" onclick="openUserModal('+JSON.stringify(u.username).replace(/"/g,'&quot;')+')">Editar</button> <button type="button" class="btn alt" onclick="toggleUser('+JSON.stringify(u.username).replace(/"/g,'&quot;')+')">'+(u.status==='activo'?'Inactivar':'Activar')+'</button></td></tr>').join('')||'<tr><td colspan="6">No se encontraron usuarios.</td></tr>';
+}
+function openUserModal(username){
+ if(!isSuper())return;
+ const u=demoUsers.find(x=>x.username===username);
+ editingUsername=u?u.username:null;
+ $('userModalTitle').textContent=u?'Editar usuario':'Agregar usuario';
+ $('editUsername').value=u?.username||'';
+ $('editUsername').readOnly=!!u;
+ $('editName').value=u?.name||'';
+ $('editEmail').value=u?.email||'';
+ $('editEmail').required=true;
+ if(u?.username==='admin'&&!u.email)$('editEmail').required=false;
+ $('editRole').value=u?.profile||'operativo';
+ $('editStatus').value=u?.status||'activo';
+ $('userDialog').showModal();
+}
+function toggleUser(username){
+ if(!isSuper())return;
+ const u=demoUsers.find(x=>x.username===username);if(!u)return;
+ if(u.username==='admin'&&u.status==='activo')return alert('La cuenta admin principal no puede inactivarse en esta demostración.');
+ if(u.status==='activo'&&u.profile==='super'&&demoUsers.filter(x=>x.profile==='super'&&x.status==='activo').length<=1)return alert('Debe quedar al menos un superusuario activo.');
+ const next=u.status==='activo'?'inactivo':'activo';
+ if(!confirm('¿'+(next==='activo'?'Activar':'Inactivar')+' al usuario '+u.username+'?'))return;
+ u.status=next;persistUsers();renderUsers();
+}
+$('userForm').onsubmit=e=>{
+ e.preventDefault();if(!isSuper())return;
+ const username=$('editUsername').value.trim(),name=$('editName').value.trim(),email=$('editEmail').value.trim(),profile=$('editRole').value,status=$('editStatus').value;
+ if(!username||!name||(!email&&username!=='admin'))return alert('Completá los datos del usuario.');
+ if(!['operativo','admin','super'].includes(profile)||!['activo','inactivo'].includes(status))return;
+ if(demoUsers.some(u=>u.username.toLowerCase()===username.toLowerCase()&&u.username!==editingUsername))return alert('El nombre de usuario ya existe.');
+ if(email&&demoUsers.some(u=>u.email&&u.email.toLowerCase()===email.toLowerCase()&&u.username!==editingUsername))return alert('El correo ya está registrado.');
+ if(username==='admin'&&(profile!=='super'||status!=='activo'))return alert('La cuenta admin debe permanecer activa y con perfil Superusuario en la demostración.');
+ const old=demoUsers.find(u=>u.username===editingUsername);
+ if(old&&old.profile==='super'&&old.status==='activo'&&(profile!=='super'||status!=='activo')&&demoUsers.filter(u=>u.profile==='super'&&u.status==='activo').length<=1)return alert('Debe quedar al menos un superusuario activo.');
+ const value={username,name,email,profile,status};
+ if(old)Object.assign(old,value);else demoUsers.push(value);
+ persistUsers();$('userDialog').close();renderUsers();
+ alert('Usuario guardado exitosamente en esta demostración.');
+};
+const beforeUsersRender=render;
+render=function(){beforeUsersRender();if(isSuper())renderUsers();};
 
 render();
 $('loginForm').onsubmit=e=>{e.preventDefault();const username=$('loginUser').value.trim(),profile=$('loginRole').value;if(!username||!['operativo','admin','super'].includes(profile))return;sessionStorage.setItem(SESSION_KEY,JSON.stringify({username,profile}));openDemoSession(username,profile);};
