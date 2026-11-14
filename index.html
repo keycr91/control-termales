@@ -48,7 +48,7 @@ function followModal(id,mode){
  if(!i||i.estado!=='Abierta'||(mode!=='comment'&&!admin()))return;
  followId=id;followMode=mode;
  const titles={comment:'Agregar comentario',assign:'Cambiar responsable',close:'Finalizar incidencia'};
- const history=i.comentarios.map(c=>'<div class="entry"><strong>'+esc(c.autor)+'</strong> · '+esc(c.fecha)+'<div>'+esc(c.texto)+'</div></div>').join('')||'<p class="muted">Sin comentarios previos.</p>';
+ const timeline=[...i.comentarios.map(c=>({tipo:'comentario',fecha:c.fecha,ts:c.ts||0,autor:c.autor,texto:c.texto})),...i.historial.map(h=>({tipo:'asignacion',fecha:h.fecha,ts:Date.parse(h.fecha)||0,autor:h.autor,texto:'Responsable cambiado: '+h.responsable+' → '+h.nuevoResponsable}))];const history=timeline.map(c=>'<div class="entry"><strong>'+esc(c.autor)+'</strong> · '+esc(c.fecha)+'<div>'+esc(c.texto)+'</div></div>').join('')||'<p class="muted">Sin movimientos previos.</p>';
  const opts=data.responsables.filter(r=>!data.inactivos.includes(r)||r===i.responsable).map(r=>'<option '+(r===i.responsable?'selected':'')+'>'+esc(r)+'</option>').join('');
  const fields=mode==='comment'?'<label for="modalComment">Comentario de seguimiento</label><textarea id="modalComment" required maxlength="2000"></textarea>':mode==='assign'?'<label for="modalAssign">Nuevo responsable</label><select id="modalAssign" required>'+opts+'</select>':'<label for="modalCloseComment">Comentario de finalización</label><textarea id="modalCloseComment" required maxlength="2000"></textarea><label for="modalCloseDate" style="margin-top:10px">Fecha de finalización</label><input type="date" id="modalCloseDate" value="'+today()+'" min="'+esc(i.fecha)+'" max="'+today()+'" required>';
  $('followDialog').innerHTML='<h3>'+titles[mode]+' · #'+i.id+'</h3><p class="muted">'+esc(i.actividad)+' · '+esc(i.descripcion)+'</p><p class="small">Responsable actual: <strong>'+esc(i.responsable)+'</strong></p><div class="history"><strong>Historial de comentarios</strong>'+history+'</div><form id="followForm">'+fields+'<div class="actions"><button class="btn" type="submit">'+(mode==='close'?'Finalizar':'Guardar')+'</button><button type="button" class="btn alt" onclick="$(\'followDialog\').close()">Cancelar</button></div></form>';
@@ -66,7 +66,7 @@ function saveFollow(e){
  }else if(followMode==='assign'){
    const old=i.responsable,next=$('modalAssign').value;
    if(!data.responsables.includes(next)||data.inactivos.includes(next))return alert('Seleccioná un responsable activo.');
-   if(old!==next){i.historial.push({responsable:old,nuevoResponsable:next,fecha:new Date().toISOString(),autor:actor});i.responsable=next;}
+   if(old===next)return alert('La incidencia ya está asignada a ese responsable.');if(!confirm('¿Cambiar responsable de '+old+' a '+next+'?'))return;i.historial.push({responsable:old,nuevoResponsable:next,fecha:at,autor:actor});i.responsable=next;
  }else if(followMode==='close'){
    const t=$('modalCloseComment').value.trim(),fecha=$('modalCloseDate').value;
    if(!t||!fecha||fecha<i.fecha||fecha>today())return alert('Indicá comentario y fecha de cierre válidos.');
