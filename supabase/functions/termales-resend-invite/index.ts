@@ -35,13 +35,14 @@ Deno.serve(async(req)=>{
   if(!authRecord.user.email_confirmed_at){
    const {error:inviteError}=await svc.auth.admin.inviteUserByEmail(target.email,{data:{full_name:target.full_name}});
    if(inviteError){
+    if(inviteError.status===429||inviteError.code==='over_email_send_rate_limit')return response(429,{error:'Supabase alcanzó el límite temporal de correos de autenticación. Intentá de nuevo más tarde. Si ocurre con frecuencia, se debe configurar un servicio SMTP propio.'});
     if(!/already|registered|exists|confirmed/i.test(inviteError.message))return response(400,{error:'No se pudo reenviar la invitación: '+inviteError.message});
     mode='recovery';
    }
   }else mode='recovery';
   if(mode==='recovery'){
    const {error:resetError}=await svc.auth.resetPasswordForEmail(target.email);
-   if(resetError)return response(400,{error:'No se pudo enviar el correo de acceso: '+resetError.message});
+   if(resetError){if(resetError.status===429||resetError.code==='over_email_send_rate_limit')return response(429,{error:'Supabase alcanzó el límite temporal de correos de autenticación. Intentá de nuevo más tarde. Si ocurre con frecuencia, se debe configurar un servicio SMTP propio.'});return response(400,{error:'No se pudo enviar el correo de acceso: '+resetError.message});}
   }
   return response(200,{success:true,mode,message:mode==='invite'?'Invitación reenviada correctamente.':'Correo para establecer o recuperar la contraseña enviado correctamente.'});
  }catch(e){return response(500,{error:e instanceof Error?e.message:'Error al reenviar la invitación'});}
